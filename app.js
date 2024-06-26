@@ -46,33 +46,42 @@ const convertDistrictDbObjectToResponseObject = dbObject => {
 }
 
 const middleWareFunction = (request, response, next) => {
-  const authHeader = request.header
+  const authHeader = request.headers['authorization']
   let jwtToken
   if (authHeader !== undefined) {
     jwtToken = authHeader.split(' ')[1]
     jwt.verify(jwtToken, 'secret', async (error, payload) => {
       if (error) {
-        response.status('Invalid Token')
+        response.status(401)
+        response.send('Invalid JWT Token')
       } else {
         next()
       }
     })
+  } else {
+    response.status(401)
+    response.send('Invalid JWT Token')
   }
 }
 
-app.post('/login/', async (request, middleWareFunction, response) => {
+app.post('/login/', async (request, response) => {
   const {username, password} = request.body
-  const getUserQuery = `SELECT * FROM user WHERE username = '${username}'`
-  const dbUser = await db.get(getUserQuery)
-  if (dbUser === undefined) {
+  const selectUserQuery = `SELECT * FROM user WHERE username = '${username}';`
+  const databaseUser = await db.get(selectUserQuery)
+  if (databaseUser === undefined) {
     response.status(400)
     response.send('Invalid user')
   } else {
-    const isPasswordRight = await bcrypt.compare(password, dbUser.password)
-    if (isPasswordRight === true) {
-      const payload = {username: username}
-      const jwtToken = await jwt.sign(payload, 'secret')
-      response.send(jwtToken)
+    const isPasswordMatched = await bcrypt.compare(
+      password,
+      databaseUser.password,
+    )
+    if (isPasswordMatched === true) {
+      const payload = {
+        username: username,
+      }
+      const jwtToken = jwt.sign(payload, 'MY_SECRET_TOKEN')
+      response.send({jwtToken})
     } else {
       response.status(400)
       response.send('Invalid password')
